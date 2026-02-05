@@ -47,7 +47,7 @@ LOGOUT_SEL = 'a[href="/logout"].action-btn.ghost'
 
 # ✅ server 页面加载成功标志：出现 “Now managing”
 NOW_MANAGING_XPATH = 'xpath=//p[contains(normalize-space(.), "Now managing")]'
-NOW_MANAGING_NAME_XPATH = 'xpath=//p[contains(normalize-space(.), "Now managing")]/following-sibling::h1[1]'  # FIX
+NOW_MANAGING_NAME_XPATH = 'xpath=//p[contains(normalize-space(.), "Now managing")]/ancestor::div[1]//h1[1]'  # FIX
 
 # ✅ 服务器卡片（你给的）：<a href="/servers/12399" class="server-card">
 SERVER_CARD_LINK_SEL = 'a.server-card[href^="/servers/"]'
@@ -304,6 +304,12 @@ def _find_server_id_and_go_server_page(sb: SB) -> Tuple[Optional[str], Optional[
         for _ in range(30):
             try:
                 if sb.is_element_visible(NOW_MANAGING_XPATH):
+                    server_name = _get_server_name(sb)  # FIX
+                    if server_name:
+                        print(f"🖥️ Server name: {server_name}")  # FIX
+                    server_name = _get_server_name(sb)  # FIX
+                    if server_name:
+                        print(f"🖥️ Server name: {server_name}")  # FIX
                     return server_id, server_name, True  # FIX
             except Exception:
                 pass
@@ -313,6 +319,9 @@ def _find_server_id_and_go_server_page(sb: SB) -> Tuple[Optional[str], Optional[
                 if f"/servers/{server_id}" in u:
                     # 给 SPA 一点渲染时间
                     time.sleep(1)
+                    server_name = _get_server_name(sb)  # FIX
+                    if server_name:
+                        print(f"🖥️ Server name: {server_name}")  # FIX
                     return server_id, server_name, True  # FIX
             except Exception:
                 pass
@@ -329,6 +338,9 @@ def _find_server_id_and_go_server_page(sb: SB) -> Tuple[Optional[str], Optional[
             sb.wait_for_element_visible("body", timeout=30)
             _try_click_captcha(sb, "open server_url 后")  # CF  # FIX
             sb.wait_for_element_visible(NOW_MANAGING_XPATH, timeout=30)
+            server_name = _get_server_name(sb)  # FIX
+            if server_name:
+                print(f"🖥️ Server name: {server_name}")  # FIX
             return server_id, server_name, True  # FIX
         except Exception:
             screenshot(sb, f"goto_server_failed_{int(time.time())}.png")
@@ -349,6 +361,10 @@ def _post_login_visit_then_logout(sb: SB) -> Tuple[Optional[str], Optional[str],
     server_id, server_name, entered_ok = _find_server_id_and_go_server_page(sb)  # FIX
     if not entered_ok:
         return server_id, None, False  # FIX
+
+    # FIX: if entered ok but name missing, take a screenshot for diagnosis
+    if not server_name:
+        screenshot(sb, f"server_name_missing_{int(time.time())}.png")
 
     # 1) server 页停留
     stay1 = random.randint(4, 6)
@@ -406,6 +422,28 @@ def _post_login_visit_then_logout(sb: SB) -> Tuple[Optional[str], Optional[str],
             pass
 
         time.sleep(1)
+
+        # FIX: last-chance logout via direct open
+    try:
+        logout_url = HOME_URL.rstrip("/") + "/logout"
+        sb.open(logout_url)
+        _try_click_captcha(sb, "logout 最后一次 open 后")  # CF
+        sb.wait_for_element_visible("body", timeout=30)
+        for _ in range(10):
+            try:
+                url_now = (sb.get_current_url() or "").lower()
+            except Exception:
+                url_now = ""
+            if "/login" in url_now:
+                return server_id, server_name, True  # FIX
+            try:
+                if sb.is_element_visible(EMAIL_SEL) and sb.is_element_visible(PASS_SEL):
+                    return server_id, server_name, True  # FIX
+            except Exception:
+                pass
+            time.sleep(1)
+    except Exception:
+        pass
 
     screenshot(sb, f"logout_verify_failed_{int(time.time())}.png")
     return server_id, server_name, False  # FIX
